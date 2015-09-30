@@ -467,10 +467,15 @@ typedef struct {
     const VSVideoInfo *vi;
 
     int thresh;
-    int blur;
-    int type;
+    int blur_level;
+    int blur_type;
     int depth;
     int chroma;
+
+    void (*edge_mask)(const uint8_t *srcp, uint8_t *dstp, int stride, int width, int height, int thresh);
+    void (*blur)(uint8_t *mask, uint8_t *temp, int stride, int width, int height);
+    void (*bilinear_downscale)(uint8_t *srcp, int src_stride, int src_width, int src_height);
+    void (*warp)(const uint8_t *srcp, const uint8_t *edgep, uint8_t *dstp, int stride, int edge_stride, int width, int height, int depth);
 } AWarpSharp2Data;
 
 
@@ -509,18 +514,15 @@ static const VSFrameRef *VS_CC aWarpSharp2GetFrame(int n, int activationReason, 
             const uint8_t *srcp = vsapi->getReadPtr(src, 0);
             uint8_t *dstp = vsapi->getWritePtr(dst, 0);
 
-            sobel_c(srcp, mask_y, stride_y, width_y, height_y, d->thresh);
+            d->edge_mask(srcp, mask_y, stride_y, width_y, height_y, d->thresh);
 
-            for (int i = 0; i < d->blur; i++)
-                if (d->type == 0)
-                    blur_r6_c(mask_y, dstp, stride_y, width_y, height_y);
-                else
-                    blur_r2_c(mask_y, dstp, stride_y, width_y, height_y);
+            for (int i = 0; i < d->blur_level; i++)
+                d->blur(mask_y, dstp, stride_y, width_y, height_y);
 
             if (d->chroma == 6)
                 vs_bitblt(dstp, stride_y, srcp, stride_y, width_y, height_y);
             else
-                warp_c<0>(srcp, mask_y, dstp, stride_y, stride_y, width_y, height_y, d->depth);
+                d->warp(srcp, mask_y, dstp, stride_y, stride_y, width_y, height_y, d->depth);
         }
 
         if (d->chroma == 0) {
@@ -546,15 +548,12 @@ static const VSFrameRef *VS_CC aWarpSharp2GetFrame(int n, int activationReason, 
                 const uint8_t *srcp = vsapi->getReadPtr(src, plane);
                 uint8_t *dstp = vsapi->getWritePtr(dst, plane);
 
-                sobel_c(srcp, mask_uv, stride_uv, width_uv, height_uv, d->thresh);
+                d->edge_mask(srcp, mask_uv, stride_uv, width_uv, height_uv, d->thresh);
 
-                for (int i = 0; i < (d->blur + 1) / 2; i++)
-                    if (d->type == 0)
-                        blur_r6_c(mask_uv, dstp, stride_uv, width_uv, height_uv);
-                    else
-                        blur_r2_c(mask_uv, dstp, stride_uv, width_uv, height_uv);
+                for (int i = 0; i < (d->blur_level + 1) / 2; i++)
+                    d->blur(mask_uv, dstp, stride_uv, width_uv, height_uv);
 
-                warp_c<0>(srcp, mask_uv, dstp, stride_uv, stride_uv, width_uv, height_uv, d->depth / 2);
+                d->warp(srcp, mask_uv, dstp, stride_uv, stride_uv, width_uv, height_uv, d->depth / 2);
             }
 
             vs_aligned_free(mask_uv);
@@ -564,18 +563,14 @@ static const VSFrameRef *VS_CC aWarpSharp2GetFrame(int n, int activationReason, 
             int width_uv = vsapi->getFrameWidth(src, 1);
             int height_uv = vsapi->getFrameHeight(src, 1);
 
-            if (d->vi->format->subSamplingW && d->vi->format->subSamplingH)
-                bilinear_downscale_hv_c(mask_y, stride_y, d->vi->width, d->vi->height);
-            else if (d->vi->format->subSamplingW)
-                bilinear_downscale_h_c(mask_y, stride_y, d->vi->width, d->vi->height);
-            else if (d->vi->format->subSamplingH)
-                bilinear_downscale_v_c(mask_y, stride_y, d->vi->width, d->vi->height);
+            if (d->bilinear_downscale)
+                d->bilinear_downscale(mask_y, stride_y, d->vi->width, d->vi->height);
 
             for (int plane = 1; plane < d->vi->format->numPlanes; plane++) {
                 const uint8_t *srcp = vsapi->getReadPtr(src, plane);
                 uint8_t *dstp = vsapi->getWritePtr(dst, plane);
 
-                warp_c<0>(srcp, mask_y, dstp, stride_uv, stride_y, width_uv, height_uv, d->depth / 2);
+                d->warp(srcp, mask_y, dstp, stride_uv, stride_y, width_uv, height_uv, d->depth / 2);
             }
         }
 
@@ -600,6 +595,27 @@ static void VS_CC aWarpSharp2Free(void *instanceData, VSCore *core, const VSAPI 
 }
 
 
+static void selectFunctions(AWarpSharp2Data *d) {
+    d->edge_mask = sobel_c;
+
+    if (d->blur_type == 0)
+        d->blur = blur_r6_c;
+    else
+        d->blur = blur_r2_c;
+
+    if (d->vi->format->subSamplingW && d->vi->format->subSamplingH)
+        d->bilinear_downscale = bilinear_downscale_hv_c;
+    else if (d->vi->format->subSamplingW)
+        d->bilinear_downscale = bilinear_downscale_h_c;
+    else if (d->vi->format->subSamplingH)
+        d->bilinear_downscale = bilinear_downscale_v_c;
+    else
+        d->bilinear_downscale = nullptr;
+
+    d->warp = warp_c<0>;
+}
+
+
 static void VS_CC aWarpSharp2Create(const VSMap *in, VSMap *out, void *userData, VSCore *core, const VSAPI *vsapi) {
     AWarpSharp2Data d;
     AWarpSharp2Data *data;
@@ -610,11 +626,11 @@ static void VS_CC aWarpSharp2Create(const VSMap *in, VSMap *out, void *userData,
     if (err)
         d.thresh = 128;
 
-    d.type = int64ToIntS(vsapi->propGetInt(in, "type", 0, &err));
+    d.blur_type = int64ToIntS(vsapi->propGetInt(in, "type", 0, &err));
 
-    d.blur = int64ToIntS(vsapi->propGetInt(in, "blur", 0, &err));
+    d.blur_level = int64ToIntS(vsapi->propGetInt(in, "blur", 0, &err));
     if (err)
-        d.blur = d.type ? 3 : 2;
+        d.blur_level = d.blur_type ? 3 : 2;
 
     d.depth = int64ToIntS(vsapi->propGetInt(in, "depth", 0, &err));
     if (err)
@@ -630,12 +646,12 @@ static void VS_CC aWarpSharp2Create(const VSMap *in, VSMap *out, void *userData,
         return;
     }
 
-    if (d.blur < 0) {
+    if (d.blur_level < 0) {
         vsapi->setError(out, "AWarpSharp2: blur must be at least 0.");
         return;
     }
 
-    if (d.type < 0 || d.type > 1) {
+    if (d.blur_type < 0 || d.blur_type > 1) {
         vsapi->setError(out, "AWarpSharp2: type must be 0 or 1.");
         return;
     }
@@ -670,6 +686,9 @@ static void VS_CC aWarpSharp2Create(const VSMap *in, VSMap *out, void *userData,
         vsapi->freeNode(d.node);
         return;
     }
+
+
+    selectFunctions(&d);
 
 
     data = (AWarpSharp2Data *)malloc(sizeof(d));
