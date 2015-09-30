@@ -8,6 +8,11 @@
 #include <VSHelper.h>
 
 
+#if defined(AWARPSHARP2_X86)
+extern void sobel_u8_sse2(const uint8_t *srcp, uint8_t *dstp, int stride, int width, int height, int thresh);
+#endif
+
+
 static void sobel_c(const uint8_t *srcp, uint8_t *dstp, int stride, int width, int height, int thresh) {
     uint8_t *dstp_orig = dstp;
 
@@ -471,6 +476,7 @@ typedef struct {
     int blur_type;
     int depth;
     int chroma;
+    int opt;
 
     void (*edge_mask)(const uint8_t *srcp, uint8_t *dstp, int stride, int width, int height, int thresh);
     void (*blur)(uint8_t *mask, uint8_t *temp, int stride, int width, int height);
@@ -613,6 +619,12 @@ static void selectFunctions(AWarpSharp2Data *d) {
         d->bilinear_downscale = nullptr;
 
     d->warp = warp_c<0>;
+
+#if defined(AWARPSHARP2_X86)
+    if (d->opt) {
+        d->edge_mask = sobel_u8_sse2;
+    }
+#endif
 }
 
 
@@ -639,6 +651,10 @@ static void VS_CC aWarpSharp2Create(const VSMap *in, VSMap *out, void *userData,
     d.chroma = int64ToIntS(vsapi->propGetInt(in, "chroma", 0, &err));
     if (err)
         d.chroma = 4;
+
+    d.opt = !!vsapi->propGetInt(in, "opt", 0, &err);
+    if (err)
+        d.opt = 1;
 
 
     if (d.thresh < 0 || d.thresh > 255) {
@@ -707,5 +723,6 @@ VS_EXTERNAL_API(void) VapourSynthPluginInit(VSConfigPlugin configFunc, VSRegiste
             "type:int:opt;"
             "depth:int:opt;"
             "chroma:int:opt;"
+            "opt:int:opt;"
             , aWarpSharp2Create, 0, plugin);
 }
