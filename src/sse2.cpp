@@ -76,3 +76,203 @@ void sobel_u8_sse2(const uint8_t *srcp, uint8_t *dstp, int stride, int width, in
     memcpy(dstp_orig, dstp_orig + stride, width);
     memcpy(dstp, dstp - stride, width);
 }
+
+
+static FORCE_INLINE void blur_r6_h_left_u8_sse2(const uint8_t *srcp, uint8_t *dstp) {
+    __m128i avg12 = _mm_avg_epu8(_mm_loadu_si128((const __m128i *)(srcp + 1)), _mm_loadu_si128((const __m128i *)(srcp + 2)));
+    __m128i avg34 = _mm_avg_epu8(_mm_loadu_si128((const __m128i *)(srcp + 3)), _mm_loadu_si128((const __m128i *)(srcp + 4)));
+    __m128i avg56 = _mm_avg_epu8(_mm_loadu_si128((const __m128i *)(srcp + 5)), _mm_loadu_si128((const __m128i *)(srcp + 6)));
+
+    __m128i avg012 = _mm_avg_epu8(_mm_loadu_si128((const __m128i *)(srcp)), avg12);
+    __m128i avg3456 = _mm_avg_epu8(avg34, avg56);
+    __m128i avg0123456 = _mm_avg_epu8(avg012, avg3456);
+    __m128i avg = _mm_avg_epu8(avg012, avg0123456);
+
+    _mm_storeu_si128((__m128i *)(dstp), avg);
+}
+
+
+static FORCE_INLINE void blur_r6_h_middle_u8_sse2(const uint8_t *srcp, uint8_t *dstp) {
+    __m128i avg11 = _mm_avg_epu8(_mm_loadu_si128((const __m128i *)(srcp - 1)), _mm_loadu_si128((const __m128i *)(srcp + 1)));
+    __m128i avg22 = _mm_avg_epu8(_mm_loadu_si128((const __m128i *)(srcp - 2)), _mm_loadu_si128((const __m128i *)(srcp + 2)));
+    __m128i avg33 = _mm_avg_epu8(_mm_loadu_si128((const __m128i *)(srcp - 3)), _mm_loadu_si128((const __m128i *)(srcp + 3)));
+    __m128i avg44 = _mm_avg_epu8(_mm_loadu_si128((const __m128i *)(srcp - 4)), _mm_loadu_si128((const __m128i *)(srcp + 4)));
+    __m128i avg55 = _mm_avg_epu8(_mm_loadu_si128((const __m128i *)(srcp - 5)), _mm_loadu_si128((const __m128i *)(srcp + 5)));
+    __m128i avg66 = _mm_avg_epu8(_mm_loadu_si128((const __m128i *)(srcp - 6)), _mm_loadu_si128((const __m128i *)(srcp + 6)));
+
+    __m128i avg12 = _mm_avg_epu8(avg11, avg22);
+    __m128i avg34 = _mm_avg_epu8(avg33, avg44);
+    __m128i avg56 = _mm_avg_epu8(avg55, avg66);
+    __m128i avg012 = _mm_avg_epu8(_mm_loadu_si128((const __m128i *)(srcp)), avg12);
+    __m128i avg3456 = _mm_avg_epu8(avg34, avg56);
+    __m128i avg0123456 = _mm_avg_epu8(avg012, avg3456);
+    __m128i avg = _mm_avg_epu8(avg012, avg0123456);
+
+    _mm_storeu_si128((__m128i *)(dstp), avg);
+}
+
+
+static FORCE_INLINE void blur_r6_h_right_u8_sse2(const uint8_t *srcp, uint8_t *dstp) {
+    __m128i avg12 = _mm_avg_epu8(_mm_loadu_si128((const __m128i *)(srcp - 1)), _mm_loadu_si128((const __m128i *)(srcp - 2)));
+    __m128i avg34 = _mm_avg_epu8(_mm_loadu_si128((const __m128i *)(srcp - 3)), _mm_loadu_si128((const __m128i *)(srcp - 4)));
+    __m128i avg56 = _mm_avg_epu8(_mm_loadu_si128((const __m128i *)(srcp - 5)), _mm_loadu_si128((const __m128i *)(srcp - 6)));
+
+    __m128i avg012 = _mm_avg_epu8(_mm_loadu_si128((const __m128i *)(srcp)), avg12);
+    __m128i avg3456 = _mm_avg_epu8(avg34, avg56);
+    __m128i avg0123456 = _mm_avg_epu8(avg012, avg3456);
+    __m128i avg = _mm_avg_epu8(avg012, avg0123456);
+
+    // This is the right edge. Only the highest six bytes are needed.
+    int extra_bytes = *(int16_t *)(dstp + 8);
+    avg = _mm_insert_epi16(avg, extra_bytes, 4);
+    _mm_storeh_pi((__m64 *)(dstp + 8), _mm_castsi128_ps(avg));
+}
+
+
+static FORCE_INLINE void blur_r6_v_top_u8_sse2(const uint8_t *srcp, uint8_t *dstp, int stride) {
+    __m128i l0 = _mm_loadu_si128((const __m128i *)(srcp));
+    __m128i l1 = _mm_loadu_si128((const __m128i *)(srcp + stride));
+    __m128i l2 = _mm_loadu_si128((const __m128i *)(srcp + stride * 2));
+    __m128i l3 = _mm_loadu_si128((const __m128i *)(srcp + stride * 3));
+    __m128i l4 = _mm_loadu_si128((const __m128i *)(srcp + stride * 4));
+    __m128i l5 = _mm_loadu_si128((const __m128i *)(srcp + stride * 5));
+    __m128i l6 = _mm_loadu_si128((const __m128i *)(srcp + stride * 6));
+
+    __m128i avg12 = _mm_avg_epu8(l1, l2);
+    __m128i avg34 = _mm_avg_epu8(l3, l4);
+    __m128i avg56 = _mm_avg_epu8(l5, l6);
+
+    __m128i avg3456 = _mm_avg_epu8(avg34, avg56);
+    __m128i avg012 = _mm_avg_epu8(l0, avg12);
+    __m128i avg0123456 = _mm_avg_epu8(avg012, avg3456);
+    __m128i avg = _mm_avg_epu8(avg012, avg0123456);
+
+    _mm_storeu_si128((__m128i *)(dstp), avg);
+}
+
+
+static FORCE_INLINE void blur_r6_v_middle_u8_sse2(const uint8_t *srcp, uint8_t *dstp, int stride) {
+    __m128i m6 = _mm_loadu_si128((const __m128i *)(srcp - stride * 6));
+    __m128i m5 = _mm_loadu_si128((const __m128i *)(srcp - stride * 5));
+    __m128i m4 = _mm_loadu_si128((const __m128i *)(srcp - stride * 4));
+    __m128i m3 = _mm_loadu_si128((const __m128i *)(srcp - stride * 3));
+    __m128i m2 = _mm_loadu_si128((const __m128i *)(srcp - stride * 2));
+    __m128i m1 = _mm_loadu_si128((const __m128i *)(srcp - stride));
+    __m128i l0 = _mm_loadu_si128((const __m128i *)(srcp));
+    __m128i l1 = _mm_loadu_si128((const __m128i *)(srcp + stride));
+    __m128i l2 = _mm_loadu_si128((const __m128i *)(srcp + stride * 2));
+    __m128i l3 = _mm_loadu_si128((const __m128i *)(srcp + stride * 3));
+    __m128i l4 = _mm_loadu_si128((const __m128i *)(srcp + stride * 4));
+    __m128i l5 = _mm_loadu_si128((const __m128i *)(srcp + stride * 5));
+    __m128i l6 = _mm_loadu_si128((const __m128i *)(srcp + stride * 6));
+
+    __m128i avg11 = _mm_avg_epu8(m1, l1);
+    __m128i avg22 = _mm_avg_epu8(m2, l2);
+    __m128i avg33 = _mm_avg_epu8(m3, l3);
+    __m128i avg44 = _mm_avg_epu8(m4, l4);
+    __m128i avg55 = _mm_avg_epu8(m5, l5);
+    __m128i avg66 = _mm_avg_epu8(m6, l6);
+
+    __m128i avg12 = _mm_avg_epu8(avg11, avg22);
+    __m128i avg34 = _mm_avg_epu8(avg33, avg44);
+    __m128i avg56 = _mm_avg_epu8(avg55, avg66);
+    __m128i avg012 = _mm_avg_epu8(l0, avg12);
+    __m128i avg3456 = _mm_avg_epu8(avg34, avg56);
+    __m128i avg0123456 = _mm_avg_epu8(avg012, avg3456);
+    __m128i avg = _mm_avg_epu8(avg012, avg0123456);
+
+    _mm_storeu_si128((__m128i *)(dstp), avg);
+}
+
+
+static FORCE_INLINE void blur_r6_v_bottom_u8_sse2(const uint8_t *srcp, uint8_t *dstp, int stride) {
+    __m128i m6 = _mm_loadu_si128((const __m128i *)(srcp - stride * 6));
+    __m128i m5 = _mm_loadu_si128((const __m128i *)(srcp - stride * 5));
+    __m128i m4 = _mm_loadu_si128((const __m128i *)(srcp - stride * 4));
+    __m128i m3 = _mm_loadu_si128((const __m128i *)(srcp - stride * 3));
+    __m128i m2 = _mm_loadu_si128((const __m128i *)(srcp - stride * 2));
+    __m128i m1 = _mm_loadu_si128((const __m128i *)(srcp - stride));
+    __m128i l0 = _mm_loadu_si128((const __m128i *)(srcp));
+
+    __m128i avg12 = _mm_avg_epu8(m1, m2);
+    __m128i avg34 = _mm_avg_epu8(m3, m4);
+    __m128i avg56 = _mm_avg_epu8(m5, m6);
+    __m128i avg012 = _mm_avg_epu8(l0, avg12);
+    __m128i avg3456 = _mm_avg_epu8(avg34, avg56);
+    __m128i avg0123456 = _mm_avg_epu8(avg012, avg3456);
+    __m128i avg = _mm_avg_epu8(avg012, avg0123456);
+
+    _mm_storeu_si128((__m128i *)(dstp), avg);
+}
+
+
+void blur_r6_u8_sse2(uint8_t *mask, uint8_t *temp, int stride, int width, int height) {
+    // Horizontal blur from mask to temp.
+    // Vertical blur from temp back to mask.
+
+    int width_sse2 = (width & ~15) + 12;
+    if (width_sse2 > stride)
+        width_sse2 -= 16;
+
+    uint8_t *mask_orig = mask;
+    uint8_t *temp_orig = temp;
+
+    // Horizontal blur.
+
+    for (int y = 0; y < height; y++) {
+        blur_r6_h_left_u8_sse2(mask, temp);
+
+        for (int x = 6; x < width_sse2 - 6; x += 16)
+            blur_r6_h_middle_u8_sse2(mask + x, temp + x);
+
+        if (width + 12 > width_sse2)
+            blur_r6_h_middle_u8_sse2(mask + width - 22, temp + width - 22);
+
+        blur_r6_h_right_u8_sse2(mask + width - 16, temp + width - 16);
+
+        mask += stride;
+        temp += stride;
+    }
+
+
+    // Vertical blur.
+
+    width_sse2 = width & ~15;
+
+    mask = mask_orig;
+    temp = temp_orig;
+    int y;
+
+    for (y = 0; y < 6; y++) {
+        for (int x = 0; x < width_sse2; x += 16)
+            blur_r6_v_top_u8_sse2(temp + x, mask + x, stride);
+
+        if (width > width_sse2)
+            blur_r6_v_top_u8_sse2(temp + width - 16, mask + width - 16, stride);
+
+        mask += stride;
+        temp += stride;
+    }
+
+    for ( ; y < height - 6; y++) {
+        for (int x = 0; x < width_sse2; x += 16)
+            blur_r6_v_middle_u8_sse2(temp + x, mask + x, stride);
+
+        if (width > width_sse2)
+            blur_r6_v_middle_u8_sse2(temp + width - 16, mask + width - 16, stride);
+
+        mask += stride;
+        temp += stride;
+    }
+
+    for ( ; y < height; y++) {
+        for (int x = 0; x < width_sse2; x += 16)
+            blur_r6_v_bottom_u8_sse2(temp + x, mask + x, stride);
+
+        if (width > width_sse2)
+            blur_r6_v_bottom_u8_sse2(temp + width - 16, mask + width - 16, stride);
+
+        mask += stride;
+        temp += stride;
+    }
+}
