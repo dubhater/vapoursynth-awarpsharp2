@@ -12,6 +12,8 @@
 extern void sobel_u8_sse2(const uint8_t *srcp, uint8_t *dstp, int stride, int width, int height, int thresh);
 extern void blur_r6_u8_sse2(uint8_t *mask, uint8_t *temp, int stride, int width, int height);
 extern void blur_r2_u8_sse2(uint8_t *mask, uint8_t *temp, int stride, int width, int height);
+extern void warp0_u8_sse2(const uint8_t *srcp, const uint8_t *edgep, uint8_t *dstp, int stride, int edge_stride, int width, int height, int depth);
+extern void warp2_u8_sse2(const uint8_t *srcp, const uint8_t *edgep, uint8_t *dstp, int stride, int edge_stride, int width, int height, int depth);
 #endif
 
 
@@ -630,6 +632,8 @@ static void selectFunctions(AWarpSharp2Data *d) {
             d->blur = blur_r6_u8_sse2;
         else
             d->blur = blur_r2_u8_sse2;
+
+        d->warp = warp0_u8_sse2;
     }
 #endif
 }

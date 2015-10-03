@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <emmintrin.h>
@@ -388,4 +389,329 @@ void blur_r2_u8_sse2(uint8_t *mask, uint8_t *temp, int stride, int width, int he
         mask += stride;
         temp += stride;
     }
+}
+
+
+template <int SMAGL>
+static FORCE_INLINE void warp_mmword_u8_sse2(const uint8_t *srcp, const uint8_t *edgep, uint8_t *dstp, int src_stride, int edge_stride, int height, int x, int y, __m128i depth, __m128i zero, __m128i x_limit_min, __m128i x_limit_max, __m128i y_limit_min, __m128i y_limit_max, __m128i word_64, __m128i word_127, __m128i word_128, __m128i word_255, __m128i one_stride) {
+    int SMAG = 1 << SMAGL;
+
+    // calculate displacement
+
+    __m128i above = _mm_loadl_epi64((const __m128i *)(edgep + x - (y ? edge_stride : 0)));
+    __m128i below = _mm_loadl_epi64((const __m128i *)(edgep + x + (y < height - 1 ? edge_stride : 0)));
+
+    __m128i left = _mm_loadl_epi64((const __m128i *)(edgep + x - 1));
+    __m128i right = _mm_loadl_epi64((const __m128i *)(edgep + x + 1));
+
+    above = _mm_unpacklo_epi8(above, zero);
+    below = _mm_unpacklo_epi8(below, zero);
+    left = _mm_unpacklo_epi8(left, zero);
+    right = _mm_unpacklo_epi8(right, zero);
+
+    __m128i h = _mm_sub_epi16(left, right);
+    __m128i v = _mm_sub_epi16(above, below);
+
+    h = _mm_slli_epi16(h, 7);
+    v = _mm_slli_epi16(v, 7);
+
+    h = _mm_mulhi_epi16(h, depth);
+    v = _mm_mulhi_epi16(v, depth);
+
+    v = _mm_max_epi16(v, y_limit_min);
+    v = _mm_min_epi16(v, y_limit_max);
+
+    __m128i remainder_h = h;
+    __m128i remainder_v = v;
+
+    if (SMAGL) {
+        remainder_h = _mm_slli_epi16(remainder_h, SMAGL);
+        remainder_v = _mm_slli_epi16(remainder_v, SMAGL);
+    }
+
+    remainder_h = _mm_and_si128(remainder_h, word_127);
+    remainder_v = _mm_and_si128(remainder_v, word_127);
+
+    h = _mm_srai_epi16(h, 7 - SMAGL);
+    v = _mm_srai_epi16(v, 7 - SMAGL);
+
+    __m128i xx = _mm_set1_epi32(x << SMAGL);
+    xx = _mm_packs_epi32(xx, xx);
+
+    h = _mm_adds_epi16(h, xx);
+
+    remainder_h = _mm_and_si128(remainder_h, _mm_cmpgt_epi16(x_limit_max, h));
+    remainder_h = _mm_andnot_si128(_mm_cmpgt_epi16(x_limit_min, h), remainder_h);
+
+    h = _mm_max_epi16(h, x_limit_min);
+    h = _mm_min_epi16(h, x_limit_max);
+
+    // h and v contain the displacement now.
+
+    __m128i disp_lo = _mm_unpacklo_epi16(v, h);
+    __m128i disp_hi = _mm_unpackhi_epi16(v, h);
+    disp_lo = _mm_madd_epi16(disp_lo, one_stride);
+    disp_hi = _mm_madd_epi16(disp_hi, one_stride);
+
+    __m128i line0 = _mm_setzero_si128();
+    __m128i line1 = _mm_setzero_si128();
+
+    int offset = _mm_cvtsi128_si32(disp_lo);
+    disp_lo = _mm_srli_si128(disp_lo, 4);
+    line0 = _mm_insert_epi16(line0, *(int16_t *)(srcp + offset), 0);
+    line1 = _mm_insert_epi16(line1, *(int16_t *)(srcp + offset + src_stride), 0);
+
+    offset = _mm_cvtsi128_si32(disp_lo);
+    disp_lo = _mm_srli_si128(disp_lo, 4);
+    line0 = _mm_insert_epi16(line0, *(int16_t *)(srcp + offset + 1 * SMAG), 1);
+    line1 = _mm_insert_epi16(line1, *(int16_t *)(srcp + offset + src_stride + 1 * SMAG), 1);
+
+    offset = _mm_cvtsi128_si32(disp_lo);
+    disp_lo = _mm_srli_si128(disp_lo, 4);
+    line0 = _mm_insert_epi16(line0, *(int16_t *)(srcp + offset + 2 * SMAG), 2);
+    line1 = _mm_insert_epi16(line1, *(int16_t *)(srcp + offset + src_stride + 2 * SMAG), 2);
+
+    offset = _mm_cvtsi128_si32(disp_lo);
+    disp_lo = _mm_srli_si128(disp_lo, 4);
+    line0 = _mm_insert_epi16(line0, *(int16_t *)(srcp + offset + 3 * SMAG), 3);
+    line1 = _mm_insert_epi16(line1, *(int16_t *)(srcp + offset + src_stride + 3 * SMAG), 3);
+
+    offset = _mm_cvtsi128_si32(disp_hi);
+    disp_hi = _mm_srli_si128(disp_hi, 4);
+    line0 = _mm_insert_epi16(line0, *(int16_t *)(srcp + offset + 4 * SMAG), 4);
+    line1 = _mm_insert_epi16(line1, *(int16_t *)(srcp + offset + src_stride + 4 * SMAG), 4);
+
+    offset = _mm_cvtsi128_si32(disp_hi);
+    disp_hi = _mm_srli_si128(disp_hi, 4);
+    line0 = _mm_insert_epi16(line0, *(int16_t *)(srcp + offset + 5 * SMAG), 5);
+    line1 = _mm_insert_epi16(line1, *(int16_t *)(srcp + offset + src_stride + 5 * SMAG), 5);
+
+    offset = _mm_cvtsi128_si32(disp_hi);
+    disp_hi = _mm_srli_si128(disp_hi, 4);
+    line0 = _mm_insert_epi16(line0, *(int16_t *)(srcp + offset + 6 * SMAG), 6);
+    line1 = _mm_insert_epi16(line1, *(int16_t *)(srcp + offset + src_stride + 6 * SMAG), 6);
+
+    offset = _mm_cvtsi128_si32(disp_hi);
+    disp_hi = _mm_srli_si128(disp_hi, 4);
+    line0 = _mm_insert_epi16(line0, *(int16_t *)(srcp + offset + 7 * SMAG), 7);
+    line1 = _mm_insert_epi16(line1, *(int16_t *)(srcp + offset + src_stride + 7 * SMAG), 7);
+
+    __m128i left0 = _mm_and_si128(line0, word_255);
+    __m128i left1 = _mm_and_si128(line1, word_255);
+
+    __m128i right0 = _mm_srli_epi16(line0, 8);
+    __m128i right1 = _mm_srli_epi16(line1, 8);
+
+    left0 = _mm_mullo_epi16(left0, _mm_sub_epi16(word_128, remainder_h));
+    left1 = _mm_mullo_epi16(left1, _mm_sub_epi16(word_128, remainder_h));
+
+    right0 = _mm_mullo_epi16(right0, remainder_h);
+    right1 = _mm_mullo_epi16(right1, remainder_h);
+
+    line0 = _mm_add_epi16(left0, right0);
+    line1 = _mm_add_epi16(left1, right1);
+
+    line0 = _mm_add_epi16(line0, word_64);
+    line1 = _mm_add_epi16(line1, word_64);
+
+    line0 = _mm_srai_epi16(line0, 7);
+    line1 = _mm_srai_epi16(line1, 7);
+
+    line0 = _mm_mullo_epi16(line0, _mm_sub_epi16(word_128, remainder_v));
+    line1 = _mm_mullo_epi16(line1, remainder_v);
+
+    __m128i result = _mm_add_epi16(line0, line1);
+
+    result = _mm_add_epi16(result, word_64);
+
+    result = _mm_srai_epi16(result, 7);
+
+    result = _mm_packus_epi16(result, result);
+
+    _mm_storel_epi64((__m128i *)(dstp + x), result);
+}
+
+
+template <int SMAGL>
+static FORCE_INLINE void warp_edge_c(const uint8_t *srcp, const uint8_t *edgep, uint8_t *dstp, int src_stride, int edge_stride, int width, int height, int x, int y, int depth) {
+    int SMAG = 1 << SMAGL;
+
+    depth <<= 8;
+
+    const int x_limit_min = 0 * SMAG;
+    const int x_limit_max = (width - 1) * SMAG;
+
+    int y_limit_min = -y * 128;
+    int y_limit_max = (height - y) * 128 - 129; // (height - y - 1) * 128 - 1
+
+    // calculate displacement
+
+    int above = edgep[x - (y ? edge_stride : 0)];
+    int below = edgep[x + (y < height - 1 ? edge_stride : 0)];
+
+    int left = edgep[x - (x ? 1 : 0)];
+    int right = edgep[x + (x < width - 1 ? 1 : 0)];
+
+    int h = left - right;
+    int v = above - below;
+
+    h <<= 7;
+    v <<= 7;
+
+    h *= depth;
+    h >>= 16;
+    v *= depth;
+    v >>= 16;
+
+    v = std::max(v, y_limit_min);
+    v = std::min(v, y_limit_max);
+
+    int remainder_h = h;
+    int remainder_v = v;
+
+    if (SMAGL) {
+        remainder_h <<= SMAGL;
+        remainder_v <<= SMAGL;
+    }
+
+    remainder_h &= 127;
+    remainder_v &= 127;
+
+    h >>= 7 - SMAGL;
+    v >>= 7 - SMAGL;
+
+    h += x << SMAGL;
+    h = std::min(std::max(h, -32768), 32767); // likely pointless
+
+    bool remainder_needed = (x_limit_max > h) && !(x_limit_min > h);
+    if (!remainder_needed)
+        remainder_h = 0; // probably correct
+
+    h = std::min(h, x_limit_max);
+    h = std::max(h, x_limit_min);
+
+    // h and v contain the displacement now.
+
+    int s00 = srcp[v * src_stride + h];
+    int s01 = srcp[v * src_stride + h + 1];
+    int s10 = srcp[(v + 1) * src_stride + h];
+    int s11 = srcp[(v + 1) * src_stride + h + 1];
+
+    int s0 = s00 * (128 - remainder_h);
+    int s1 = s10 * (128 - remainder_h);
+
+    s0 += s01 * remainder_h;
+    s1 += s11 * remainder_h;
+
+    s0 += 64;
+    s1 += 64;
+
+    s0 >>= 7;
+    s1 >>= 7;
+
+    s0 *= 128 - remainder_v;
+    s1 *= remainder_v;
+
+    int s = s0 + s1;
+
+    s += 64;
+
+    s >>= 7;
+
+    dstp[x] = std::min(std::max(s, 0), 255);
+}
+
+
+template <int SMAGL> // 0 or 2
+static void warp_u8_sse2(const uint8_t *srcp, const uint8_t *edgep, uint8_t *dstp, int stride, int edge_stride, int width, int height, int depth_scalar) {
+    int SMAG = 1 << SMAGL;
+
+    int src_stride = stride * SMAG;
+
+    __m128i depth = _mm_set1_epi32(depth_scalar << 8);
+    depth = _mm_packs_epi32(depth, depth);
+
+    const int16_t x_limit_min_array[8] = {
+        (int16_t)(0 * SMAG),
+        (int16_t)(-1 * SMAG),
+        (int16_t)(-2 * SMAG),
+        (int16_t)(-3 * SMAG),
+        (int16_t)(-4 * SMAG),
+        (int16_t)(-5 * SMAG),
+        (int16_t)(-6 * SMAG),
+        (int16_t)(-7 * SMAG)
+    };
+    const int16_t x_limit_max_array[8] = {
+        (int16_t)((width - 1) * SMAG),
+        (int16_t)((width - 2) * SMAG),
+        (int16_t)((width - 3) * SMAG),
+        (int16_t)((width - 4) * SMAG),
+        (int16_t)((width - 5) * SMAG),
+        (int16_t)((width - 6) * SMAG),
+        (int16_t)((width - 7) * SMAG),
+        (int16_t)((width - 8) * SMAG)
+    };
+
+    __m128i x_limit_min = _mm_loadu_si128((const __m128i *)x_limit_min_array);
+    __m128i x_limit_max = _mm_loadu_si128((const __m128i *)x_limit_max_array);
+
+    int width_sse2 = (width & ~7) + 2;
+    if (width_sse2 > stride)
+        width_sse2 -= 8;
+
+    __m128i zero = _mm_setzero_si128();
+
+    __m128i word_255 = _mm_setzero_si128();
+    word_255 = _mm_cmpeq_epi16(word_255, word_255);
+    word_255 = _mm_srli_epi16(word_255, 8);
+
+    __m128i word_127 = _mm_setzero_si128();
+    word_127 = _mm_cmpeq_epi16(word_127, word_127);
+    word_127 = _mm_srli_epi16(word_127, 9);
+
+    __m128i word_1 = _mm_setzero_si128();
+    word_1 = _mm_cmpeq_epi16(word_1, word_1);
+    word_1 = _mm_srli_epi16(word_1, 15);
+    __m128i one_stride = _mm_unpacklo_epi16(_mm_set1_epi16(src_stride), word_1);
+
+    __m128i word_128 = _mm_setzero_si128();
+    word_128 = _mm_cmpeq_epi16(word_128, word_128);
+    word_128 = _mm_slli_epi16(word_128, 15);
+    word_128 = _mm_srli_epi16(word_128, 8);
+
+    __m128i word_64 = _mm_setzero_si128();
+    word_64 = _mm_cmpeq_epi16(word_64, word_64);
+    word_64 = _mm_slli_epi16(word_64, 15);
+    word_64 = _mm_srli_epi16(word_64, 9);
+
+    for (int y = 0; y < height; y++) {
+        __m128i y_limit_min = _mm_set1_epi32(-y * 128);
+        __m128i y_limit_max = _mm_set1_epi32((height - y) * 128 - 129); // (height - y - 1) * 128 - 1
+        y_limit_min = _mm_packs_epi32(y_limit_min, y_limit_min);
+        y_limit_max = _mm_packs_epi32(y_limit_max, y_limit_max);
+
+        warp_edge_c<SMAGL>(srcp, edgep, dstp, src_stride, edge_stride, width, height, 0, y, depth_scalar);
+
+        for (int x = 1; x < width_sse2 - 1; x += 8)
+            warp_mmword_u8_sse2<SMAGL>(srcp, edgep, dstp, src_stride, edge_stride, height, x, y, depth, zero, x_limit_min, x_limit_max, y_limit_min, y_limit_max, word_64, word_127, word_128, word_255, one_stride);
+
+        if (width + 2 > width_sse2)
+            warp_mmword_u8_sse2<SMAGL>(srcp, edgep, dstp, src_stride, edge_stride, height, width - 9, y, depth, zero, x_limit_min, x_limit_max, y_limit_min, y_limit_max, word_64, word_127, word_128, word_255, one_stride);
+
+        warp_edge_c<SMAGL>(srcp, edgep, dstp, src_stride, edge_stride, width, height, width - 1, y, depth_scalar);
+
+        srcp += src_stride * SMAG;
+        edgep += edge_stride;
+        dstp += stride;
+    }
+}
+
+
+void warp0_u8_sse2(const uint8_t *srcp, const uint8_t *edgep, uint8_t *dstp, int stride, int edge_stride, int width, int height, int depth) {
+    warp_u8_sse2<0>(srcp, edgep, dstp, stride, edge_stride, width, height, depth);
+}
+
+
+void warp2_u8_sse2(const uint8_t *srcp, const uint8_t *edgep, uint8_t *dstp, int stride, int edge_stride, int width, int height, int depth) {
+    warp_u8_sse2<2>(srcp, edgep, dstp, stride, edge_stride, width, height, depth);
 }
