@@ -11,6 +11,7 @@
 #if defined(AWARPSHARP2_X86)
 extern void sobel_u8_sse2(const uint8_t *srcp, uint8_t *dstp, int stride, int width, int height, int thresh);
 extern void blur_r6_u8_sse2(uint8_t *mask, uint8_t *temp, int stride, int width, int height);
+extern void blur_r2_u8_sse2(uint8_t *mask, uint8_t *temp, int stride, int width, int height);
 #endif
 
 
@@ -627,6 +628,8 @@ static void selectFunctions(AWarpSharp2Data *d) {
 
         if (d->blur_type == 0)
             d->blur = blur_r6_u8_sse2;
+        else
+            d->blur = blur_r2_u8_sse2;
     }
 #endif
 }

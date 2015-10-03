@@ -276,3 +276,116 @@ void blur_r6_u8_sse2(uint8_t *mask, uint8_t *temp, int stride, int width, int he
         temp += stride;
     }
 }
+
+
+static FORCE_INLINE void blur_r2_h_u8_sse2(const uint8_t *srcp, uint8_t *dstp) {
+    __m128i avg1 = _mm_avg_epu8(_mm_loadu_si128((const __m128i *)(srcp - 1)), _mm_loadu_si128((const __m128i *)(srcp + 1)));
+    __m128i avg2 = _mm_avg_epu8(_mm_loadu_si128((const __m128i *)(srcp - 2)), _mm_loadu_si128((const __m128i *)(srcp + 2)));
+    __m128i middle = _mm_loadu_si128((const __m128i *)(srcp));
+    __m128i avg = _mm_avg_epu8(avg2, middle);
+    avg = _mm_avg_epu8(avg, middle);
+    avg = _mm_avg_epu8(avg, avg1);
+
+    _mm_storeu_si128((__m128i *)(dstp), avg);
+}
+
+
+static FORCE_INLINE void blur_r2_v_u8_sse2(const uint8_t *srcp, uint8_t *dstp, int stride_p2, int stride_p1, int stride_n1, int stride_n2) {
+    __m128i m2 = _mm_loadu_si128((const __m128i *)(srcp + stride_p2));
+    __m128i m1 = _mm_loadu_si128((const __m128i *)(srcp + stride_p1));
+    __m128i l0 = _mm_loadu_si128((const __m128i *)(srcp));
+    __m128i l1 = _mm_loadu_si128((const __m128i *)(srcp + stride_n1));
+    __m128i l2 = _mm_loadu_si128((const __m128i *)(srcp + stride_n2));
+
+    __m128i avg1 = _mm_avg_epu8(m1, l1);
+    __m128i avg2 = _mm_avg_epu8(m2, l2);
+    __m128i avg = _mm_avg_epu8(avg2, l0);
+    avg = _mm_avg_epu8(avg, l0);
+    avg = _mm_avg_epu8(avg, avg1);
+
+    _mm_storeu_si128((__m128i *)(dstp), avg);
+}
+
+
+void blur_r2_u8_sse2(uint8_t *mask, uint8_t *temp, int stride, int width, int height) {
+    // Horizontal blur from mask to temp.
+    // Vertical blur from temp back to mask.
+
+    int width_sse2 = (width & ~15) + 4;
+    if (width_sse2 > stride)
+        width_sse2 -= 16;
+
+    uint8_t *mask_orig = mask;
+    uint8_t *temp_orig = temp;
+
+    // Horizontal blur.
+
+    for (int y = 0; y < height; y++) {
+        int avg, avg1, avg2;
+
+        avg1 = (mask[0] + mask[1] + 1) >> 1;
+        avg2 = (mask[0] + mask[2] + 1) >> 1;
+        avg = (avg2 + mask[0] + 1) >> 1;
+        avg = (avg + mask[0] + 1) >> 1;
+        avg = (avg + avg1 + 1) >> 1;
+
+        temp[0] = avg;
+
+        avg1 = (mask[0] + mask[2] + 1) >> 1;
+        avg2 = (mask[0] + mask[3] + 1) >> 1;
+        avg = (avg2 + mask[1] + 1) >> 1;
+        avg = (avg + mask[1] + 1) >> 1;
+        avg = (avg + avg1 + 1) >> 1;
+
+        temp[1] = avg;
+
+        for (int x = 2; x < width_sse2 - 2; x += 16)
+            blur_r2_h_u8_sse2(mask + x, temp + x);
+
+        if (width + 4 > width_sse2)
+            blur_r2_h_u8_sse2(mask + width - 18, temp + width - 18);
+
+        avg1 = (mask[width - 3] + mask[width - 1] + 1) >> 1;
+        avg2 = (mask[width - 4] + mask[width - 1] + 1) >> 1;
+        avg = (avg2 + mask[width - 2] + 1) >> 1;
+        avg = (avg + mask[width - 2] + 1) >> 1;
+        avg = (avg + avg1 + 1) >> 1;
+
+        temp[width - 2] = avg;
+
+        avg1 = (mask[width - 2] + mask[width - 1] + 1) >> 1;
+        avg2 = (mask[width - 3] + mask[width - 1] + 1) >> 1;
+        avg = (avg2 + mask[width - 1] + 1) >> 1;
+        avg = (avg + mask[width - 1] + 1) >> 1;
+        avg = (avg + avg1 + 1) >> 1;
+
+        temp[width - 1] = avg;
+
+        mask += stride;
+        temp += stride;
+    }
+
+
+    // Vertical blur.
+
+    width_sse2 = width & ~15;
+
+    mask = mask_orig;
+    temp = temp_orig;
+
+    for (int y = 0; y < height; y++) {
+        int stride_p1 = y ? -stride : 0;
+        int stride_p2 = y > 1 ? stride_p1 * 2 : stride_p1;
+        int stride_n1 = y < height - 1 ? stride : 0;
+        int stride_n2 = y < height - 2 ? stride_n1 * 2 : stride_n1;
+
+        for (int x = 0; x < width_sse2; x += 16)
+            blur_r2_v_u8_sse2(temp + x, mask + x, stride_p2, stride_p1, stride_n1, stride_n2);
+
+        if (width > width_sse2)
+            blur_r2_v_u8_sse2(temp + width - 16, mask + width - 16, stride_p2, stride_p1, stride_n1, stride_n2);
+
+        mask += stride;
+        temp += stride;
+    }
+}
