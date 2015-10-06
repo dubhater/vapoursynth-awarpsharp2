@@ -623,10 +623,8 @@ static FORCE_INLINE void warp_edge_c(const uint8_t *srcp, const uint8_t *edgep, 
 
 
 template <int SMAGL> // 0 or 2
-static void warp_u8_sse2(const uint8_t *srcp, const uint8_t *edgep, uint8_t *dstp, int stride, int edge_stride, int width, int height, int depth_scalar) {
+static void warp_u8_sse2(const uint8_t *srcp, const uint8_t *edgep, uint8_t *dstp, int src_stride, int edge_stride, int dst_stride, int width, int height, int depth_scalar) {
     int SMAG = 1 << SMAGL;
-
-    int src_stride = stride * SMAG;
 
     __m128i depth = _mm_set1_epi32(depth_scalar << 8);
     depth = _mm_packs_epi32(depth, depth);
@@ -656,7 +654,7 @@ static void warp_u8_sse2(const uint8_t *srcp, const uint8_t *edgep, uint8_t *dst
     __m128i x_limit_max = _mm_loadu_si128((const __m128i *)x_limit_max_array);
 
     int width_sse2 = (width & ~7) + 2;
-    if (width_sse2 > stride)
+    if (width_sse2 > dst_stride)
         width_sse2 -= 8;
 
     __m128i zero = _mm_setzero_si128();
@@ -702,16 +700,16 @@ static void warp_u8_sse2(const uint8_t *srcp, const uint8_t *edgep, uint8_t *dst
 
         srcp += src_stride * SMAG;
         edgep += edge_stride;
-        dstp += stride;
+        dstp += dst_stride;
     }
 }
 
 
-void warp0_u8_sse2(const uint8_t *srcp, const uint8_t *edgep, uint8_t *dstp, int stride, int edge_stride, int width, int height, int depth) {
-    warp_u8_sse2<0>(srcp, edgep, dstp, stride, edge_stride, width, height, depth);
+void warp0_u8_sse2(const uint8_t *srcp, const uint8_t *edgep, uint8_t *dstp, int src_stride, int edge_stride, int dst_stride, int width, int height, int depth) {
+    warp_u8_sse2<0>(srcp, edgep, dstp, src_stride, edge_stride, dst_stride, width, height, depth);
 }
 
 
-void warp2_u8_sse2(const uint8_t *srcp, const uint8_t *edgep, uint8_t *dstp, int stride, int edge_stride, int width, int height, int depth) {
-    warp_u8_sse2<2>(srcp, edgep, dstp, stride, edge_stride, width, height, depth);
+void warp2_u8_sse2(const uint8_t *srcp, const uint8_t *edgep, uint8_t *dstp, int src_stride, int edge_stride, int dst_stride, int width, int height, int depth) {
+    warp_u8_sse2<2>(srcp, edgep, dstp, src_stride, edge_stride, dst_stride, width, height, depth);
 }

@@ -12,8 +12,8 @@
 extern void sobel_u8_sse2(const uint8_t *srcp, uint8_t *dstp, int stride, int width, int height, int thresh);
 extern void blur_r6_u8_sse2(uint8_t *mask, uint8_t *temp, int stride, int width, int height);
 extern void blur_r2_u8_sse2(uint8_t *mask, uint8_t *temp, int stride, int width, int height);
-extern void warp0_u8_sse2(const uint8_t *srcp, const uint8_t *edgep, uint8_t *dstp, int stride, int edge_stride, int width, int height, int depth);
-extern void warp2_u8_sse2(const uint8_t *srcp, const uint8_t *edgep, uint8_t *dstp, int stride, int edge_stride, int width, int height, int depth);
+extern void warp0_u8_sse2(const uint8_t *srcp, const uint8_t *edgep, uint8_t *dstp, int src_stride, int edge_stride, int dst_stride, int width, int height, int depth);
+extern void warp2_u8_sse2(const uint8_t *srcp, const uint8_t *edgep, uint8_t *dstp, int src_stride, int edge_stride, int dst_stride, int width, int height, int depth);
 #endif
 
 
@@ -355,11 +355,8 @@ static void bilinear_downscale_hv_c(uint8_t *srcp, int src_stride, int src_width
 
 
 template <int SMAGL> // 0 or 2
-static void warp_c(const uint8_t *srcp, const uint8_t *edgep, uint8_t *dstp, int stride, int edge_stride, int width, int height, int depth) {
+static void warp_c(const uint8_t *srcp, const uint8_t *edgep, uint8_t *dstp, int src_stride, int edge_stride, int dst_stride, int width, int height, int depth) {
     int SMAG = 1 << SMAGL;
-
-    // Because the width of the source is width of the destination times SMAG.
-    int src_stride = stride * SMAG;
 
     depth <<= 8;
 
@@ -466,7 +463,7 @@ static void warp_c(const uint8_t *srcp, const uint8_t *edgep, uint8_t *dstp, int
 
         srcp += src_stride * SMAG;
         edgep += edge_stride;
-        dstp += stride;
+        dstp += dst_stride;
     }
 }
 
@@ -487,7 +484,7 @@ typedef struct {
     void (*edge_mask)(const uint8_t *srcp, uint8_t *dstp, int stride, int width, int height, int thresh);
     void (*blur)(uint8_t *mask, uint8_t *temp, int stride, int width, int height);
     void (*bilinear_downscale)(uint8_t *srcp, int src_stride, int src_width, int src_height);
-    void (*warp)(const uint8_t *srcp, const uint8_t *edgep, uint8_t *dstp, int stride, int edge_stride, int width, int height, int depth);
+    void (*warp)(const uint8_t *srcp, const uint8_t *edgep, uint8_t *dstp, int src_stride, int edge_stride, int dst_stride, int width, int height, int depth);
 } AWarpSharp2Data;
 
 
@@ -533,7 +530,7 @@ static const VSFrameRef *VS_CC aWarpSharp2GetFrame(int n, int activationReason, 
                 d->blur(mask_y, dstp, stride_y, width_y, height_y);
 
             if (d->process[0])
-                d->warp(srcp, mask_y, dstp, stride_y, stride_y, width_y, height_y, d->depth);
+                d->warp(srcp, mask_y, dstp, stride_y, stride_y, stride_y, width_y, height_y, d->depth);
             else
                 vs_bitblt(dstp, stride_y, srcp, stride_y, width_y, height_y);
         }
@@ -558,7 +555,7 @@ static const VSFrameRef *VS_CC aWarpSharp2GetFrame(int n, int activationReason, 
                     for (int i = 0; i < (d->blur_level + 1) / 2; i++)
                         d->blur(mask_uv, dstp, stride_uv, width_uv, height_uv);
 
-                    d->warp(srcp, mask_uv, dstp, stride_uv, stride_uv, width_uv, height_uv, d->depth / 2);
+                    d->warp(srcp, mask_uv, dstp, stride_uv, stride_uv, stride_uv, width_uv, height_uv, d->depth / 2);
                 }
 
                 vs_aligned_free(mask_uv);
@@ -578,7 +575,7 @@ static const VSFrameRef *VS_CC aWarpSharp2GetFrame(int n, int activationReason, 
                     const uint8_t *srcp = vsapi->getReadPtr(src, plane);
                     uint8_t *dstp = vsapi->getWritePtr(dst, plane);
 
-                    d->warp(srcp, mask_y, dstp, stride_uv, stride_y, width_uv, height_uv, d->depth / 2);
+                    d->warp(srcp, mask_y, dstp, stride_uv, stride_y, stride_uv, width_uv, height_uv, d->depth / 2);
                 }
             }
         }
@@ -710,15 +707,17 @@ static const VSFrameRef *VS_CC aWarpGetFrame(int n, int activationReason, void *
             const uint8_t *maskp = vsapi->getReadPtr(mask, 0);
             uint8_t *dstp = vsapi->getWritePtr(dst, 0);
 
+            int src_stride_y = vsapi->getStride(src, 0);
             int dst_stride_y = vsapi->getStride(dst, 0);
             int dst_width_y = vsapi->getFrameWidth(dst, 0);
             int dst_height_y = vsapi->getFrameHeight(dst, 0);
 
-            d->warp(srcp, maskp, dstp, dst_stride_y, dst_stride_y, dst_width_y, dst_height_y, d->depth);
+            d->warp(srcp, maskp, dstp, src_stride_y, dst_stride_y, dst_stride_y, dst_width_y, dst_height_y, d->depth);
         }
 
         if ((d->process[1] || d->process[2]) && fmt->numPlanes > 1) {
             if (d->chroma == 1) {
+                int src_stride_uv = vsapi->getStride(src, 1);
                 int dst_stride_uv = vsapi->getStride(dst, 1);
                 int dst_width_uv = vsapi->getFrameWidth(dst, 1);
                 int dst_height_uv = vsapi->getFrameHeight(dst, 1);
@@ -731,9 +730,10 @@ static const VSFrameRef *VS_CC aWarpGetFrame(int n, int activationReason, void *
                     const uint8_t *maskp = vsapi->getReadPtr(mask, plane);
                     uint8_t *dstp = vsapi->getWritePtr(dst, plane);
 
-                    d->warp(srcp, maskp, dstp, dst_stride_uv, dst_stride_uv, dst_width_uv, dst_height_uv, d->depth / 2);
+                    d->warp(srcp, maskp, dstp, src_stride_uv, dst_stride_uv, dst_stride_uv, dst_width_uv, dst_height_uv, d->depth / 2);
                 }
             } else if (d->chroma == 0) {
+                int src_stride_uv = vsapi->getStride(src, 1);
                 int dst_stride_uv = vsapi->getStride(dst, 1);
                 int dst_width_uv = vsapi->getFrameWidth(dst, 1);
                 int dst_height_uv = vsapi->getFrameHeight(dst, 1);
@@ -756,7 +756,7 @@ static const VSFrameRef *VS_CC aWarpGetFrame(int n, int activationReason, void *
                     const uint8_t *srcp = vsapi->getReadPtr(src, plane);
                     uint8_t *dstp = vsapi->getWritePtr(dst, plane);
 
-                    d->warp(srcp, maskp ? maskp : vsapi->getReadPtr(mask, 0), dstp, dst_stride_uv, mask_stride_y, dst_width_uv, dst_height_uv, d->depth / 2);
+                    d->warp(srcp, maskp ? maskp : vsapi->getReadPtr(mask, 0), dstp, src_stride_uv, mask_stride_y, dst_stride_uv, dst_width_uv, dst_height_uv, d->depth / 2);
                 }
 
                 if (maskp)
