@@ -883,8 +883,8 @@ static void VS_CC aWarpSharp2Create(const VSMap *in, VSMap *out, void *userData,
     d.vi = vsapi->getVideoInfo(d.node);
 
 
-    if (!d.vi->format || d.vi->format->bitsPerSample > 8 || d.vi->format->colorFamily == cmRGB) {
-        vsapi->setError(out, "AWarpSharp2: only constant format, 8 bit, not RGB clips supported.");
+    if (!d.vi->format || !d.vi->width || !d.vi->height || d.vi->format->bitsPerSample > 8 || d.vi->format->colorFamily == cmRGB) {
+        vsapi->setError(out, "AWarpSharp2: 8 bit, not RGB clips with constant format and dimensions supported.");
         vsapi->freeNode(d.node);
         return;
     }
@@ -957,8 +957,8 @@ static void VS_CC aSobelCreate(const VSMap *in, VSMap *out, void *userData, VSCo
     d.vi = vsapi->getVideoInfo(d.node);
 
 
-    if (!d.vi->format || d.vi->format->bitsPerSample > 8 || d.vi->format->colorFamily == cmRGB) {
-        vsapi->setError(out, "ASobel: only constant format, 8 bit, not RGB clips supported.");
+    if (!d.vi->format || !d.vi->width || !d.vi->height || d.vi->format->bitsPerSample > 8 || d.vi->format->colorFamily == cmRGB) {
+        vsapi->setError(out, "ASobel: 8 bit, not RGB clips with constant format and dimensions supported.");
         vsapi->freeNode(d.node);
         return;
     }
@@ -973,13 +973,13 @@ static void VS_CC aSobelCreate(const VSMap *in, VSMap *out, void *userData, VSCo
         int o = int64ToIntS(vsapi->propGetInt(in, "planes", i, 0));
 
         if (o < 0 || o >= n) {
-            vsapi->setError(out, "AWarpSharp2: plane index out of range.");
+            vsapi->setError(out, "ASobel: plane index out of range.");
             vsapi->freeNode(d.node);
             return;
         }
 
         if (d.process[o]) {
-            vsapi->setError(out, "AWarpSharp2: plane specified twice.");
+            vsapi->setError(out, "ASobel: plane specified twice.");
             vsapi->freeNode(d.node);
             return;
         }
@@ -1034,8 +1034,8 @@ static void VS_CC aBlurCreate(const VSMap *in, VSMap *out, void *userData, VSCor
     d.vi = vsapi->getVideoInfo(d.node);
 
 
-    if (!d.vi->format || d.vi->format->bitsPerSample > 8 || d.vi->format->colorFamily == cmRGB) {
-        vsapi->setError(out, "ABlur: only constant format, 8 bit, not RGB clips supported.");
+    if (!d.vi->format || !d.vi->width || !d.vi->height || d.vi->format->bitsPerSample > 8 || d.vi->format->colorFamily == cmRGB) {
+        vsapi->setError(out, "ABlur: 8 bit, not RGB clips with constant format and dimensions supported.");
         vsapi->freeNode(d.node);
         return;
     }
@@ -1050,13 +1050,13 @@ static void VS_CC aBlurCreate(const VSMap *in, VSMap *out, void *userData, VSCor
         int o = int64ToIntS(vsapi->propGetInt(in, "planes", i, 0));
 
         if (o < 0 || o >= n) {
-            vsapi->setError(out, "AWarpSharp2: plane index out of range.");
+            vsapi->setError(out, "ABlur: plane index out of range.");
             vsapi->freeNode(d.node);
             return;
         }
 
         if (d.process[o]) {
-            vsapi->setError(out, "AWarpSharp2: plane specified twice.");
+            vsapi->setError(out, "ABlur: plane specified twice.");
             vsapi->freeNode(d.node);
             return;
         }
@@ -1111,8 +1111,8 @@ static void VS_CC aWarpCreate(const VSMap *in, VSMap *out, void *userData, VSCor
     const VSVideoInfo *clipvi = vsapi->getVideoInfo(d.node);
 
 
-    if (!d.vi->format || d.vi->format->bitsPerSample > 8 || d.vi->format->colorFamily == cmRGB) {
-        vsapi->setError(out, "AWarp: only constant format, 8 bit, not RGB clips supported.");
+    if (!d.vi->format || !d.vi->width || !d.vi->height || d.vi->format->bitsPerSample > 8 || d.vi->format->colorFamily == cmRGB) {
+        vsapi->setError(out, "AWarp: 8 bit, not RGB clips with constant format and dimensions supported.");
         vsapi->freeNode(d.node);
         vsapi->freeNode(d.mask);
         return;
@@ -1150,13 +1150,13 @@ static void VS_CC aWarpCreate(const VSMap *in, VSMap *out, void *userData, VSCor
         int o = int64ToIntS(vsapi->propGetInt(in, "planes", i, 0));
 
         if (o < 0 || o >= n) {
-            vsapi->setError(out, "AWarpSharp2: plane index out of range.");
+            vsapi->setError(out, "AWarp: plane index out of range.");
             vsapi->freeNode(d.node);
             return;
         }
 
         if (d.process[o]) {
-            vsapi->setError(out, "AWarpSharp2: plane specified twice.");
+            vsapi->setError(out, "AWarp: plane specified twice.");
             vsapi->freeNode(d.node);
             return;
         }
