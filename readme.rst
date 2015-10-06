@@ -108,7 +108,7 @@ Examples
     src4 = c.fmtc.resample(src, w=src.width * 4, h=src.height * 4, sx=0.375, sy=0.375)
     src4 = c.fmtc.bitdepth(src4, bits=8)
 
-    warp = c.warp.AWarp(src4, warp)
+    warp = c.warp.AWarp(src4, mask)
 
 
 Compilation
