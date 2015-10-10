@@ -11,7 +11,7 @@
 #endif
 
 
-static FORCE_INLINE void sobel_xmmword_u8_sse2(const uint8_t *srcp, uint8_t *dstp, int stride, __m128i th) {
+static FORCE_INLINE void sobel_xmmword_u8_sse2(const uint8_t *srcp, uint8_t *dstp, int stride, const __m128i &th) {
     __m128i a11, a21, a31,
             a12,      a32,
             a13, a23, a33;
@@ -393,7 +393,7 @@ void blur_r2_u8_sse2(uint8_t *mask, uint8_t *temp, int stride, int width, int he
 
 
 template <int SMAGL>
-static FORCE_INLINE void warp_mmword_u8_sse2(const uint8_t *srcp, const uint8_t *edgep, uint8_t *dstp, int src_stride, int edge_stride, int height, int x, int y, __m128i depth, __m128i zero, __m128i x_limit_min, __m128i x_limit_max, __m128i y_limit_min, __m128i y_limit_max, __m128i word_64, __m128i word_127, __m128i word_128, __m128i word_255, __m128i one_stride) {
+static FORCE_INLINE void warp_mmword_u8_sse2(const uint8_t *srcp, const uint8_t *edgep, uint8_t *dstp, int src_stride, int edge_stride, int height, int x, int y, const __m128i &depth, const __m128i &zero, const __m128i &x_limit_min, const __m128i &x_limit_max, const __m128i &y_limit_min, const __m128i &y_limit_max, const __m128i &word_64, const __m128i &word_127, const __m128i &word_128, const __m128i &word_255, const __m128i &one_stride) {
     int SMAG = 1 << SMAGL;
 
     // calculate displacement
