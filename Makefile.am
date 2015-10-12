@@ -1,5 +1,5 @@
 warning_flags = -Wall -Wextra -Wno-unused-parameter -Wshadow
-common_cflags = -O2 $(MFLAGS) $(warning_flags)
+common_cflags = -O2 $(MFLAGS) $(STACKREALIGN) $(warning_flags)
 AM_CXXFLAGS = -std=c++11 $(common_cflags)
 
 AM_CPPFLAGS = $(VapourSynth_CFLAGS)

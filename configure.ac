@@ -32,6 +32,7 @@ AS_CASE(
          [test "x$BITS" = "x32"],
          [
           AC_SUBST([PLUGINLDFLAGS], ["-Wl,--kill-at"])
+          AC_SUBST([STACKREALIGN], ["-mstackrealign"])
          ]
       )
    ]
