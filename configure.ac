@@ -1,4 +1,4 @@
-AC_INIT([AWarpSharp2], [1], [https://github.com/dubhater/vapoursynth-awarpsharp2/issues], [AWarpSharp2], [https://github.com/dubhater/vapoursynth-awarpsharp2/])
+AC_INIT([AWarpSharp2], [2], [https://github.com/dubhater/vapoursynth-awarpsharp2/issues], [AWarpSharp2], [https://github.com/dubhater/vapoursynth-awarpsharp2/])
 
 : ${CXXFLAGS=""}
 
