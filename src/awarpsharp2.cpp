@@ -1209,7 +1209,7 @@ static void VS_CC aWarpCreate(const VSMap *in, VSMap *out, void *userData, VSCor
 
 
     if (!d.vi->format || !d.vi->width || !d.vi->height || d.vi->format->sampleType != stInteger || d.vi->format->bitsPerSample > 16 || d.vi->format->colorFamily == cmRGB) {
-        vsapi->setError(out, "AWarp: only 8..16 bit, not RGB clips with constant format and dimensions supported.");
+        vsapi->setError(out, "AWarp: only 8..16 bit integer, not RGB clips with constant format and dimensions supported.");
         vsapi->freeNode(d.node);
         vsapi->freeNode(d.mask);
         return;

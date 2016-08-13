@@ -28,8 +28,8 @@ AWarp warps.
 
 Parameters:
     *clip*
-        Clip to process. Must be 8..16 bit, not RGB, with constant format
-        and dimensions.
+        Clip to process. Must have constant format and dimensions,
+        8..16 bit integer pixels, and it must not be RGB.
 
         For the AWarp filter, *clip* must be either the same size as
         *mask*, or four times the size of *mask* in each dimension. The
