@@ -589,7 +589,7 @@ static const VSFrameRef *VS_CC aWarpSharp2GetFrame(int n, int activationReason, 
             if (d->process[0])
                 d->warp(srcp, mask_y, dstp, stride_y, stride_y, stride_y, width_y, height_y, d->depth, d->vi->format->bitsPerSample);
             else
-                vs_bitblt(dstp, stride_y, srcp, stride_y, width_y, height_y);
+                vs_bitblt(dstp, stride_y, srcp, stride_y, width_y * fmt->bytesPerSample, height_y);
         }
 
         if ((d->process[1] || d->process[2]) && fmt->numPlanes > 1) {
