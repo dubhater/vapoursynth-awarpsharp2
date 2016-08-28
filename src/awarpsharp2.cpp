@@ -975,7 +975,7 @@ static void VS_CC aWarpSharp2Create(const VSMap *in, VSMap *out, void *userData,
 
 
     if (!d.vi->format || !d.vi->width || !d.vi->height || d.vi->format->sampleType != stInteger || d.vi->format->bitsPerSample > 16 || d.vi->format->colorFamily == cmRGB) {
-        vsapi->setError(out, "AWarpSharp2: 8 bit, not RGB clips with constant format and dimensions supported.");
+        vsapi->setError(out, "AWarpSharp2: 8..16 bit integer, not RGB clips with constant format and dimensions supported.");
         vsapi->freeNode(d.node);
         return;
     }
@@ -1052,7 +1052,7 @@ static void VS_CC aSobelCreate(const VSMap *in, VSMap *out, void *userData, VSCo
 
 
     if (!d.vi->format || !d.vi->width || !d.vi->height || d.vi->format->sampleType != stInteger || d.vi->format->bitsPerSample > 16 || d.vi->format->colorFamily == cmRGB) {
-        vsapi->setError(out, "ASobel: only 8..16 bit, not RGB clips with constant format and dimensions supported.");
+        vsapi->setError(out, "ASobel: only 8..16 bit integer, not RGB clips with constant format and dimensions supported.");
         vsapi->freeNode(d.node);
         return;
     }
@@ -1132,7 +1132,7 @@ static void VS_CC aBlurCreate(const VSMap *in, VSMap *out, void *userData, VSCor
 
 
     if (!d.vi->format || !d.vi->width || !d.vi->height || d.vi->format->sampleType != stInteger || d.vi->format->bitsPerSample > 16 || d.vi->format->colorFamily == cmRGB) {
-        vsapi->setError(out, "ABlur: only 8..16 bit, not RGB clips with constant format and dimensions supported.");
+        vsapi->setError(out, "ABlur: only 8..16 bit integer, not RGB clips with constant format and dimensions supported.");
         vsapi->freeNode(d.node);
         return;
     }
