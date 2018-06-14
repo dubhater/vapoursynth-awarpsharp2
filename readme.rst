@@ -9,13 +9,13 @@ Usage
 =====
 ::
 
-    warp.AWarpSharp2(clip clip[, int thresh=128, int blur=2, int type=0, int depth=16, int chroma=0, int[] planes=<all>, bint opt=True])
+    warp.AWarpSharp2(clip clip[, int thresh=128, int blur=2, int type=0, int depth=16, int chroma=0, int[] planes=<all>, bint opt=True, string cplace="mpeg1"])
 
     warp.ASobel(clip clip[, int thresh=128, int[] planes=<all>, bint opt=True])
 
     warp.ABlur(clip clip[, int blur=3, int type=1, int[] planes=<all>, bint opt=True])
 
-    warp.AWarp(clip clip, clip mask[, int depth=3, int chroma=0, int[] planes=<all>, bint opt=True])
+    warp.AWarp(clip clip, clip mask[, int depth=3, int chroma=0, int[] planes=<all>, bint opt=True, string cplace="mpeg1"])
 
 AWarpSharp2 performs edge detection, blurring, and warping, all in one.
 
@@ -89,6 +89,14 @@ Parameters:
     *opt*
         If True, the best functions supported by your CPU will be used.
         If False, plain C++ functions will be used.
+
+    *cplace*
+        Chroma placement. Must be either "mpeg1" or "mpeg2".
+
+        Only relevant when *chroma* is 0 and the input is 4:2:0 or
+        4:2:2.
+
+        Default: "mpeg1".
 
 
 Examples

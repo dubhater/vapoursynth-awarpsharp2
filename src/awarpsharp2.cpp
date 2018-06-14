@@ -8,6 +8,12 @@
 #include <VSHelper.h>
 
 
+enum ChromaPlacement {
+    MPEG1,
+    MPEG2,
+};
+
+
 #if defined(AWARPSHARP2_X86)
 extern void sobel_u8_sse2(const uint8_t *srcp, uint8_t *dstp, int stride, int width, int height, int thresh, int bits_per_sample);
 extern void blur_r6_u8_sse2(uint8_t *mask, uint8_t *temp, int stride, int width, int height);
@@ -346,22 +352,40 @@ static void blur_r2_c(uint8_t *mask8, uint8_t *temp8, int stride, int width, int
 
 
 template <typename PixelType>
-static void bilinear_downscale_h_c(uint8_t *srcp8, int src_stride, int src_width, int src_height) {
+static void bilinear_downscale_h_c(uint8_t *srcp8, int src_stride, int src_width, int src_height, ChromaPlacement cplace) {
     PixelType *srcp = (PixelType *)srcp8;
 
     src_stride /= sizeof(PixelType);
 
-    for (int y = 0; y < src_height; y++) {
-        for (int x = 0; x < src_width / 2; x++)
-            srcp[x] = (srcp[x * 2] + srcp[x * 2 + 1] + 1) >> 1;
+    if (cplace == MPEG1) {
+        for (int y = 0; y < src_height; y++) {
+            for (int x = 0; x < src_width / 2; x++)
+                srcp[x] = (srcp[x * 2] + srcp[x * 2 + 1] + 1) >> 1;
 
-        srcp += src_stride;
+            srcp += src_stride;
+        }
+    } else if (cplace == MPEG2) {
+        for (int y = 0; y < src_height; y++) {
+            int c2 = srcp[0];
+
+            for (int x = 0; x < src_width / 2; x++) {
+                const int c0 = c2;
+                const int c1 = srcp[x * 2];
+                c2 = srcp[x * 2 + 1];
+
+                srcp[x] = (c0 + 2 * c1 + c2 + 2) >> 2;
+            }
+
+            srcp += src_stride;
+        }
     }
 }
 
 
 template <typename PixelType>
-static void bilinear_downscale_v_c(uint8_t *srcp8, int src_stride, int src_width, int src_height) {
+static void bilinear_downscale_v_c(uint8_t *srcp8, int src_stride, int src_width, int src_height, ChromaPlacement cplace) {
+    (void)cplace;
+
     PixelType *srcp = (PixelType *)srcp8;
 
     src_stride /= sizeof(PixelType);
@@ -376,19 +400,35 @@ static void bilinear_downscale_v_c(uint8_t *srcp8, int src_stride, int src_width
 
 
 template <typename PixelType>
-static void bilinear_downscale_hv_c(uint8_t *srcp8, int src_stride, int src_width, int src_height) {
+static void bilinear_downscale_hv_c(uint8_t *srcp8, int src_stride, int src_width, int src_height, ChromaPlacement cplace) {
     PixelType *srcp = (PixelType *)srcp8;
 
     src_stride /= sizeof(PixelType);
 
-    for (int y = 0; y < src_height / 2; y++) {
-        for (int x = 0; x < src_width / 2; x++) {
-            int avg1 = (srcp[x * 2 + y * src_stride] + srcp[x * 2 + 1 + y * src_stride] + 1) >> 1;
-            int avg2 = (srcp[x * 2 + (y + 1) * src_stride] + srcp[x * 2 + 1 + (y + 1) * src_stride] + 1) >> 1;
-            srcp[x] = (avg1 + avg2 + 1) >> 1;
-        }
+    if (cplace == MPEG1) {
+        for (int y = 0; y < src_height / 2; y++) {
+            for (int x = 0; x < src_width / 2; x++) {
+                int avg1 = (srcp[x * 2 + y * src_stride] + srcp[x * 2 + 1 + y * src_stride] + 1) >> 1;
+                int avg2 = (srcp[x * 2 + (y + 1) * src_stride] + srcp[x * 2 + 1 + (y + 1) * src_stride] + 1) >> 1;
+                srcp[x] = (avg1 + avg2 + 1) >> 1;
+            }
 
-        srcp += src_stride;
+            srcp += src_stride;
+        }
+    } else if (cplace == MPEG2) {
+        for (int y = 0; y < src_height / 2; y++) {
+            int c2 = srcp[y * src_stride] + srcp[(y + 1) * src_stride];
+
+            for (int x = 0; x < src_width / 2; x++) {
+                const int c0 = c2;
+                const int c1 = srcp[x * 2 + y * src_stride] + srcp[x * 2 + (y + 1) * src_stride];
+                c2 = srcp[x * 2 + 1 + y * src_stride] + srcp[x * 2 + 1 + (y + 1) * src_stride];
+
+                srcp[x] = (c0 + 2 * c1 + c2 + 4) >> 3;
+            }
+
+            srcp += src_stride;
+        }
     }
 }
 
@@ -536,11 +576,12 @@ typedef struct AwarpSharp2Data {
     int depth;
     int chroma;
     int process[3];
+    ChromaPlacement cplace;
     int opt;
 
     void (*edge_mask)(const uint8_t *srcp, uint8_t *dstp, int stride, int width, int height, int thresh, int bits_per_sample);
     void (*blur)(uint8_t *mask, uint8_t *temp, int stride, int width, int height);
-    void (*bilinear_downscale)(uint8_t *srcp, int src_stride, int src_width, int src_height);
+    void (*bilinear_downscale)(uint8_t *srcp, int src_stride, int src_width, int src_height, ChromaPlacement cplace);
     void (*warp)(const uint8_t *srcp, const uint8_t *edgep, uint8_t *dstp, int src_stride, int edge_stride, int dst_stride, int width, int height, int depth, int bits_per_sample);
 } AWarpSharp2Data;
 
@@ -623,7 +664,7 @@ static const VSFrameRef *VS_CC aWarpSharp2GetFrame(int n, int activationReason, 
                 int height_uv = vsapi->getFrameHeight(src, 1);
 
                 if (d->bilinear_downscale)
-                    d->bilinear_downscale(mask_y, stride_y, d->vi->width, d->vi->height);
+                    d->bilinear_downscale(mask_y, stride_y, d->vi->width, d->vi->height, d->cplace);
 
                 for (int plane = 1; plane < fmt->numPlanes; plane++) {
                     if (!d->process[plane])
@@ -803,7 +844,7 @@ static const VSFrameRef *VS_CC aWarpGetFrame(int n, int activationReason, void *
 
                     memcpy(maskp, vsapi->getReadPtr(mask, 0), mask_stride_y * mask_height_y);
 
-                    d->bilinear_downscale(maskp, mask_stride_y, mask_width_y, mask_height_y);
+                    d->bilinear_downscale(maskp, mask_stride_y, mask_width_y, mask_height_y, d->cplace);
                 }
 
                 for (int plane = 1; plane < fmt->numPlanes; plane++) {
@@ -942,6 +983,20 @@ static void VS_CC aWarpSharp2Create(const VSMap *in, VSMap *out, void *userData,
     d.opt = !!vsapi->propGetInt(in, "opt", 0, &err);
     if (err)
         d.opt = 1;
+
+    const char *cplace = vsapi->propGetData(in, "cplace", 0, &err);
+    if (err) {
+        d.cplace = MPEG1;
+    } else {
+        if (strcmp(cplace, "mpeg1") == 0) {
+            d.cplace = MPEG1;
+        } else if (strcmp(cplace, "mpeg2") == 0) {
+            d.cplace = MPEG2;
+        } else {
+            vsapi->setError(out, "AWarpSharp2: cplace must be either 'mpeg1' or 'mpeg2'.");
+            return;
+        }
+    }
 
 
     if (d.thresh < 0 || d.thresh > 255) {
@@ -1190,6 +1245,20 @@ static void VS_CC aWarpCreate(const VSMap *in, VSMap *out, void *userData, VSCor
     if (err)
         d.opt = 1;
 
+    const char *cplace = vsapi->propGetData(in, "cplace", 0, &err);
+    if (err) {
+        d.cplace = MPEG1;
+    } else {
+        if (strcmp(cplace, "mpeg1") == 0) {
+            d.cplace = MPEG1;
+        } else if (strcmp(cplace, "mpeg2") == 0) {
+            d.cplace = MPEG2;
+        } else {
+            vsapi->setError(out, "AWarp: cplace must be either 'mpeg1' or 'mpeg2'.");
+            return;
+        }
+    }
+
 
     if (d.depth < -128 || d.depth > 127) {
         vsapi->setError(out, "AWarp: depth must be between -128 and 127 (inclusive).");
@@ -1283,6 +1352,7 @@ VS_EXTERNAL_API(void) VapourSynthPluginInit(VSConfigPlugin configFunc, VSRegiste
             "chroma:int:opt;"
             "planes:int[]:opt;"
             "opt:int:opt;"
+            "cplace:data:opt;"
             , aWarpSharp2Create, 0, plugin);
 
     registerFunc("ASobel",
@@ -1307,5 +1377,6 @@ VS_EXTERNAL_API(void) VapourSynthPluginInit(VSConfigPlugin configFunc, VSRegiste
             "chroma:int:opt;"
             "planes:int[]:opt;"
             "opt:int:opt;"
+            "cplace:data:opt;"
             , aWarpCreate, 0, plugin);
 }
