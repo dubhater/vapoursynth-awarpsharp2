@@ -14,6 +14,12 @@ enum ChromaPlacement {
 };
 
 
+enum ChromaWarping {
+    WarpAlongLuma,
+    WarpAlongChroma,
+};
+
+
 #if defined(AWARPSHARP2_X86)
 extern void sobel_u8_sse2(const uint8_t *srcp, uint8_t *dstp, int stride, int width, int height, int thresh, int bits_per_sample);
 extern void blur_r6_u8_sse2(uint8_t *mask, uint8_t *temp, int stride, int width, int height);
@@ -614,7 +620,7 @@ static const VSFrameRef *VS_CC aWarpSharp2GetFrame(int n, int activationReason, 
 
         uint8_t *mask_y = nullptr;
 
-        if (d->process[0] || ((d->process[1] || d->process[2]) && d->chroma == 0 && fmt->numPlanes > 1)) {
+        if (d->process[0] || ((d->process[1] || d->process[2]) && d->chroma == WarpAlongLuma && fmt->numPlanes > 1)) {
             int stride_y = vsapi->getStride(src, 0);
 
             mask_y = vs_aligned_malloc<uint8_t>(height_y * stride_y, 32);
@@ -634,7 +640,7 @@ static const VSFrameRef *VS_CC aWarpSharp2GetFrame(int n, int activationReason, 
         }
 
         if ((d->process[1] || d->process[2]) && fmt->numPlanes > 1) {
-            if (d->chroma == 1) {
+            if (d->chroma == WarpAlongChroma) {
                 int stride_uv = vsapi->getStride(src, 1);
                 int width_uv = vsapi->getFrameWidth(src, 1);
                 int height_uv = vsapi->getFrameHeight(src, 1);
@@ -657,7 +663,7 @@ static const VSFrameRef *VS_CC aWarpSharp2GetFrame(int n, int activationReason, 
                 }
 
                 vs_aligned_free(mask_uv);
-            } else if (d->chroma == 0) {
+            } else if (d->chroma == WarpAlongLuma) {
                 int stride_y = vsapi->getStride(src, 0);
                 int stride_uv = vsapi->getStride(src, 1);
                 int width_uv = vsapi->getFrameWidth(src, 1);
@@ -814,7 +820,7 @@ static const VSFrameRef *VS_CC aWarpGetFrame(int n, int activationReason, void *
         }
 
         if ((d->process[1] || d->process[2]) && fmt->numPlanes > 1) {
-            if (d->chroma == 1) {
+            if (d->chroma == WarpAlongChroma) {
                 int src_stride_uv = vsapi->getStride(src, 1);
                 int dst_stride_uv = vsapi->getStride(dst, 1);
                 int dst_width_uv = vsapi->getFrameWidth(dst, 1);
@@ -830,7 +836,7 @@ static const VSFrameRef *VS_CC aWarpGetFrame(int n, int activationReason, void *
 
                     d->warp(srcp, maskp, dstp, src_stride_uv, dst_stride_uv, dst_stride_uv, dst_width_uv, dst_height_uv, d->depth / 2, d->vi->format->bitsPerSample);
                 }
-            } else if (d->chroma == 0) {
+            } else if (d->chroma == WarpAlongLuma) {
                 int src_stride_uv = vsapi->getStride(src, 1);
                 int dst_stride_uv = vsapi->getStride(dst, 1);
                 int dst_width_uv = vsapi->getFrameWidth(dst, 1);
