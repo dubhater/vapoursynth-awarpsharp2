@@ -579,7 +579,7 @@ typedef struct AwarpSharp2Data {
     int thresh;
     int blur_level;
     int blur_type;
-    int depth;
+    int depth[3];
     int chroma;
     int process[3];
     ChromaPlacement cplace;
@@ -634,7 +634,7 @@ static const VSFrameRef *VS_CC aWarpSharp2GetFrame(int n, int activationReason, 
                 d->blur(mask_y, dstp, stride_y, width_y, height_y);
 
             if (d->process[0])
-                d->warp(srcp, mask_y, dstp, stride_y, stride_y, stride_y, width_y, height_y, d->depth, d->vi->format->bitsPerSample);
+                d->warp(srcp, mask_y, dstp, stride_y, stride_y, stride_y, width_y, height_y, d->depth[0], d->vi->format->bitsPerSample);
             else
                 vs_bitblt(dstp, stride_y, srcp, stride_y, width_y * fmt->bytesPerSample, height_y);
         }
@@ -659,7 +659,7 @@ static const VSFrameRef *VS_CC aWarpSharp2GetFrame(int n, int activationReason, 
                     for (int i = 0; i < (d->blur_level + 1) / 2; i++)
                         d->blur(mask_uv, dstp, stride_uv, width_uv, height_uv);
 
-                    d->warp(srcp, mask_uv, dstp, stride_uv, stride_uv, stride_uv, width_uv, height_uv, d->depth / 2, d->vi->format->bitsPerSample);
+                    d->warp(srcp, mask_uv, dstp, stride_uv, stride_uv, stride_uv, width_uv, height_uv, d->depth[plane], d->vi->format->bitsPerSample);
                 }
 
                 vs_aligned_free(mask_uv);
@@ -679,7 +679,7 @@ static const VSFrameRef *VS_CC aWarpSharp2GetFrame(int n, int activationReason, 
                     const uint8_t *srcp = vsapi->getReadPtr(src, plane);
                     uint8_t *dstp = vsapi->getWritePtr(dst, plane);
 
-                    d->warp(srcp, mask_y, dstp, stride_uv, stride_y, stride_uv, width_uv, height_uv, d->depth / 2, d->vi->format->bitsPerSample);
+                    d->warp(srcp, mask_y, dstp, stride_uv, stride_y, stride_uv, width_uv, height_uv, d->depth[plane], d->vi->format->bitsPerSample);
                 }
             }
         }
@@ -816,7 +816,7 @@ static const VSFrameRef *VS_CC aWarpGetFrame(int n, int activationReason, void *
             int dst_width_y = vsapi->getFrameWidth(dst, 0);
             int dst_height_y = vsapi->getFrameHeight(dst, 0);
 
-            d->warp(srcp, maskp, dstp, src_stride_y, dst_stride_y, dst_stride_y, dst_width_y, dst_height_y, d->depth, d->vi->format->bitsPerSample);
+            d->warp(srcp, maskp, dstp, src_stride_y, dst_stride_y, dst_stride_y, dst_width_y, dst_height_y, d->depth[0], d->vi->format->bitsPerSample);
         }
 
         if ((d->process[1] || d->process[2]) && fmt->numPlanes > 1) {
@@ -834,7 +834,7 @@ static const VSFrameRef *VS_CC aWarpGetFrame(int n, int activationReason, void *
                     const uint8_t *maskp = vsapi->getReadPtr(mask, plane);
                     uint8_t *dstp = vsapi->getWritePtr(dst, plane);
 
-                    d->warp(srcp, maskp, dstp, src_stride_uv, dst_stride_uv, dst_stride_uv, dst_width_uv, dst_height_uv, d->depth / 2, d->vi->format->bitsPerSample);
+                    d->warp(srcp, maskp, dstp, src_stride_uv, dst_stride_uv, dst_stride_uv, dst_width_uv, dst_height_uv, d->depth[plane], d->vi->format->bitsPerSample);
                 }
             } else if (d->chroma == WarpAlongLuma) {
                 int src_stride_uv = vsapi->getStride(src, 1);
@@ -860,7 +860,7 @@ static const VSFrameRef *VS_CC aWarpGetFrame(int n, int activationReason, void *
                     const uint8_t *srcp = vsapi->getReadPtr(src, plane);
                     uint8_t *dstp = vsapi->getWritePtr(dst, plane);
 
-                    d->warp(srcp, maskp ? maskp : vsapi->getReadPtr(mask, 0), dstp, src_stride_uv, mask_stride_y, dst_stride_uv, dst_width_uv, dst_height_uv, d->depth / 2, d->vi->format->bitsPerSample);
+                    d->warp(srcp, maskp ? maskp : vsapi->getReadPtr(mask, 0), dstp, src_stride_uv, mask_stride_y, dst_stride_uv, dst_width_uv, dst_height_uv, d->depth[plane], d->vi->format->bitsPerSample);
                 }
 
                 if (maskp)
@@ -980,9 +980,18 @@ static void VS_CC aWarpSharp2Create(const VSMap *in, VSMap *out, void *userData,
     if (err)
         d.blur_level = d.blur_type ? 3 : 2;
 
-    d.depth = int64ToIntS(vsapi->propGetInt(in, "depth", 0, &err));
-    if (err)
-        d.depth = 16;
+    for (int i = 0; i < 3; i++) {
+        d.depth[i] = int64ToIntS(vsapi->propGetInt(in, "depth", i, &err));
+
+        if (err) {
+            if (i == 0)
+                d.depth[i] = 16;
+            else if (i == 1)
+                d.depth[i] = d.depth[i - 1] / 2;
+            else
+                d.depth[i] = d.depth[i - 1];
+        }
+    }
 
     d.chroma = int64ToIntS(vsapi->propGetInt(in, "chroma", 0, &err));
 
@@ -1020,9 +1029,11 @@ static void VS_CC aWarpSharp2Create(const VSMap *in, VSMap *out, void *userData,
         return;
     }
 
-    if (d.depth < -128 || d.depth > 127) {
-        vsapi->setError(out, "AWarpSharp2: depth must be between -128 and 127 (inclusive).");
-        return;
+    for (int i = 0; i < 3; i++) {
+        if (d.depth[i] < -128 || d.depth[i] > 127) {
+            vsapi->setError(out, "AWarpSharp2: depth must be between -128 and 127 (inclusive).");
+            return;
+        }
     }
 
     if (d.chroma < 0 || d.chroma > 1) {
@@ -1241,9 +1252,18 @@ static void VS_CC aWarpCreate(const VSMap *in, VSMap *out, void *userData, VSCor
 
     int err;
 
-    d.depth = int64ToIntS(vsapi->propGetInt(in, "depth", 0, &err));
-    if (err)
-        d.depth = 3;
+    for (int i = 0; i < 3; i++) {
+        d.depth[i] = int64ToIntS(vsapi->propGetInt(in, "depth", i, &err));
+
+        if (err) {
+            if (i == 0)
+                d.depth[i] = 3;
+            else if (i == 1)
+                d.depth[i] = d.depth[i - 1] / 2;
+            else
+                d.depth[i] = d.depth[i - 1];
+        }
+    }
 
     d.chroma = int64ToIntS(vsapi->propGetInt(in, "chroma", 0, &err));
 
@@ -1266,9 +1286,11 @@ static void VS_CC aWarpCreate(const VSMap *in, VSMap *out, void *userData, VSCor
     }
 
 
-    if (d.depth < -128 || d.depth > 127) {
-        vsapi->setError(out, "AWarp: depth must be between -128 and 127 (inclusive).");
-        return;
+    for (int i = 0; i < 3; i++) {
+        if (d.depth[i] < -128 || d.depth[i] > 127) {
+            vsapi->setError(out, "AWarp: depth must be between -128 and 127 (inclusive).");
+            return;
+        }
     }
 
     if (d.chroma < 0 || d.chroma > 1) {
@@ -1354,7 +1376,7 @@ VS_EXTERNAL_API(void) VapourSynthPluginInit(VSConfigPlugin configFunc, VSRegiste
             "thresh:int:opt;"
             "blur:int:opt;"
             "type:int:opt;"
-            "depth:int:opt;"
+            "depth:int[]:opt;"
             "chroma:int:opt;"
             "planes:int[]:opt;"
             "opt:int:opt;"
@@ -1379,7 +1401,7 @@ VS_EXTERNAL_API(void) VapourSynthPluginInit(VSConfigPlugin configFunc, VSRegiste
     registerFunc("AWarp",
             "clip:clip;"
             "mask:clip;"
-            "depth:int:opt;"
+            "depth:int[]:opt;"
             "chroma:int:opt;"
             "planes:int[]:opt;"
             "opt:int:opt;"

@@ -9,13 +9,13 @@ Usage
 =====
 ::
 
-    warp.AWarpSharp2(clip clip[, int thresh=128, int blur=2, int type=0, int depth=16, int chroma=0, int[] planes=<all>, bint opt=True, string cplace="mpeg1"])
+    warp.AWarpSharp2(clip clip[, int thresh=128, int blur=2, int type=0, int[] depth=[16, 8, 8], int chroma=0, int[] planes=<all>, bint opt=True, string cplace="mpeg1"])
 
     warp.ASobel(clip clip[, int thresh=128, int[] planes=<all>, bint opt=True])
 
     warp.ABlur(clip clip[, int blur=3, int type=1, int[] planes=<all>, bint opt=True])
 
-    warp.AWarp(clip clip, clip mask[, int depth=3, int chroma=0, int[] planes=<all>, bint opt=True, string cplace="mpeg1"])
+    warp.AWarp(clip clip, clip mask[, int[] depth=[3, 1, 1], int chroma=0, int[] planes=<all>, bint opt=True, string cplace="mpeg1"])
 
 AWarpSharp2 performs edge detection, blurring, and warping, all in one.
 
@@ -72,7 +72,9 @@ Parameters:
 
         Range: -128..127
 
-        Default: 16 for AWarpSharp2, 3 for AWarp.
+        Default for depth[0]: 16 for AWarpSharp2, 3 for AWarp.
+        Default for depth[1]: depth[0] // 2.
+        Default for depth[2]: depth[1].
 
     *chroma*
         Controls the chroma handling method. 0 will use the edge mask from
