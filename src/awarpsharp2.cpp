@@ -593,12 +593,18 @@ typedef struct AwarpSharp2Data {
 
 
 static void VS_CC aWarpSharp2Init(VSMap *in, VSMap *out, void **instanceData, VSNode *node, VSCore *core, const VSAPI *vsapi) {
+    (void)in;
+    (void)out;
+    (void)core;
+
     AWarpSharp2Data *d = (AWarpSharp2Data *) * instanceData;
     vsapi->setVideoInfo(d->vi, 1, node);
 }
 
 
 static const VSFrameRef *VS_CC aWarpSharp2GetFrame(int n, int activationReason, void **instanceData, void **frameData, VSFrameContext *frameCtx, VSCore *core, const VSAPI *vsapi) {
+    (void)frameData;
+
     const AWarpSharp2Data *d = (const AWarpSharp2Data *) * instanceData;
 
     if (activationReason == arInitial) {
@@ -698,6 +704,8 @@ static const VSFrameRef *VS_CC aWarpSharp2GetFrame(int n, int activationReason, 
 
 
 static const VSFrameRef *VS_CC aSobelGetFrame(int n, int activationReason, void **instanceData, void **frameData, VSFrameContext *frameCtx, VSCore *core, const VSAPI *vsapi) {
+    (void)frameData;
+
     const AWarpSharp2Data *d = (const AWarpSharp2Data *) * instanceData;
 
     if (activationReason == arInitial) {
@@ -739,6 +747,8 @@ static const VSFrameRef *VS_CC aSobelGetFrame(int n, int activationReason, void 
 
 
 static const VSFrameRef *VS_CC aBlurGetFrame(int n, int activationReason, void **instanceData, void **frameData, VSFrameContext *frameCtx, VSCore *core, const VSAPI *vsapi) {
+    (void)frameData;
+
     const AWarpSharp2Data *d = (const AWarpSharp2Data *) * instanceData;
 
     if (activationReason == arInitial) {
@@ -781,6 +791,8 @@ static const VSFrameRef *VS_CC aBlurGetFrame(int n, int activationReason, void *
 
 
 static const VSFrameRef *VS_CC aWarpGetFrame(int n, int activationReason, void **instanceData, void **frameData, VSFrameContext *frameCtx, VSCore *core, const VSAPI *vsapi) {
+    (void)frameData;
+
     const AWarpSharp2Data *d = (const AWarpSharp2Data *) * instanceData;
 
     if (activationReason == arInitial) {
@@ -880,6 +892,8 @@ static const VSFrameRef *VS_CC aWarpGetFrame(int n, int activationReason, void *
 
 
 static void VS_CC aWarpSharp2Free(void *instanceData, VSCore *core, const VSAPI *vsapi) {
+    (void)core;
+
     AWarpSharp2Data *d = (AWarpSharp2Data *)instanceData;
 
     vsapi->freeNode(d->node);
@@ -963,6 +977,8 @@ static void selectFunctions(AWarpSharp2Data *d, bool warp4=false) {
 
 
 static void VS_CC aWarpSharp2Create(const VSMap *in, VSMap *out, void *userData, VSCore *core, const VSAPI *vsapi) {
+    (void)userData;
+
     AWarpSharp2Data d;
     AWarpSharp2Data *data;
 
@@ -1097,6 +1113,8 @@ static void VS_CC aWarpSharp2Create(const VSMap *in, VSMap *out, void *userData,
 
 
 static void VS_CC aSobelCreate(const VSMap *in, VSMap *out, void *userData, VSCore *core, const VSAPI *vsapi) {
+    (void)userData;
+
     AWarpSharp2Data d;
     AWarpSharp2Data *data;
 
@@ -1168,6 +1186,8 @@ static void VS_CC aSobelCreate(const VSMap *in, VSMap *out, void *userData, VSCo
 
 
 static void VS_CC aBlurCreate(const VSMap *in, VSMap *out, void *userData, VSCore *core, const VSAPI *vsapi) {
+    (void)userData;
+
     AWarpSharp2Data d;
     AWarpSharp2Data *data;
 
@@ -1245,6 +1265,8 @@ static void VS_CC aBlurCreate(const VSMap *in, VSMap *out, void *userData, VSCor
 
 
 static void VS_CC aWarpCreate(const VSMap *in, VSMap *out, void *userData, VSCore *core, const VSAPI *vsapi) {
+    (void)userData;
+
     AWarpSharp2Data d;
     AWarpSharp2Data *data;
 
