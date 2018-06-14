@@ -751,29 +751,26 @@ static void warp_u8_sse2(const uint8_t *srcp, const uint8_t *edgep, uint8_t *dst
     __m128i depth = _mm_set1_epi32(depth_scalar << 8);
     depth = _mm_packs_epi32(depth, depth);
 
-    const int16_t x_limit_min_array[8] = {
-        (int16_t)(0 * SMAG),
-        (int16_t)(-1 * SMAG),
-        (int16_t)(-2 * SMAG),
-        (int16_t)(-3 * SMAG),
-        (int16_t)(-4 * SMAG),
-        (int16_t)(-5 * SMAG),
-        (int16_t)(-6 * SMAG),
-        (int16_t)(-7 * SMAG)
-    };
-    const int16_t x_limit_max_array[8] = {
-        (int16_t)((width - 1) * SMAG),
-        (int16_t)((width - 2) * SMAG),
-        (int16_t)((width - 3) * SMAG),
-        (int16_t)((width - 4) * SMAG),
-        (int16_t)((width - 5) * SMAG),
-        (int16_t)((width - 6) * SMAG),
-        (int16_t)((width - 7) * SMAG),
-        (int16_t)((width - 8) * SMAG)
-    };
-
-    __m128i x_limit_min = _mm_loadu_si128((const __m128i *)x_limit_min_array);
-    __m128i x_limit_max = _mm_loadu_si128((const __m128i *)x_limit_max_array);
+    const __m128i x_limit_min = _mm_setr_epi16(
+         0 * SMAG,
+        -1 * SMAG,
+        -2 * SMAG,
+        -3 * SMAG,
+        -4 * SMAG,
+        -5 * SMAG,
+        -6 * SMAG,
+        -7 * SMAG
+    );
+    const __m128i x_limit_max = _mm_setr_epi16(
+        (width - 1) * SMAG,
+        (width - 2) * SMAG,
+        (width - 3) * SMAG,
+        (width - 4) * SMAG,
+        (width - 5) * SMAG,
+        (width - 6) * SMAG,
+        (width - 7) * SMAG,
+        (width - 8) * SMAG
+    );
 
     int width_sse2 = (width & ~7) + 2;
     if (width_sse2 > dst_stride)
@@ -781,28 +778,17 @@ static void warp_u8_sse2(const uint8_t *srcp, const uint8_t *edgep, uint8_t *dst
 
     __m128i zero = _mm_setzero_si128();
 
-    __m128i word_255 = _mm_setzero_si128();
-    word_255 = _mm_cmpeq_epi16(word_255, word_255);
-    word_255 = _mm_srli_epi16(word_255, 8);
+    __m128i word_255 = _mm_set1_epi16(255);
 
-    __m128i word_127 = _mm_setzero_si128();
-    word_127 = _mm_cmpeq_epi16(word_127, word_127);
-    word_127 = _mm_srli_epi16(word_127, 9);
+    __m128i word_127 = _mm_set1_epi16(127);
 
-    __m128i word_1 = _mm_setzero_si128();
-    word_1 = _mm_cmpeq_epi16(word_1, word_1);
-    word_1 = _mm_srli_epi16(word_1, 15);
+    __m128i word_1 = _mm_set1_epi16(1);
+
     __m128i one_stride = _mm_unpacklo_epi16(_mm_set1_epi16(src_stride), word_1);
 
-    __m128i word_128 = _mm_setzero_si128();
-    word_128 = _mm_cmpeq_epi16(word_128, word_128);
-    word_128 = _mm_slli_epi16(word_128, 15);
-    word_128 = _mm_srli_epi16(word_128, 8);
+    __m128i word_128 = _mm_set1_epi16(128);
 
-    __m128i word_64 = _mm_setzero_si128();
-    word_64 = _mm_cmpeq_epi16(word_64, word_64);
-    word_64 = _mm_slli_epi16(word_64, 15);
-    word_64 = _mm_srli_epi16(word_64, 9);
+    __m128i word_64 = _mm_set1_epi16(64);
 
     for (int y = 0; y < height; y++) {
         __m128i y_limit_min = _mm_set1_epi32(-y * 128);
