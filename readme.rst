@@ -80,15 +80,21 @@ Parameters:
         chroma channel and use those to warp each chroma channel
         individually.
 
+        Default: 0.
+
     *planes*
         Controls which planes are processed. Planes that are not processed
         are simply copied from the source frame, except in the AWarp filter,
         when *clip* is four times the size of *mask*, in which case the
         unprocessed planes will contain uninitialised memory.
 
+        Default: all.
+
     *opt*
         If True, the best functions supported by your CPU will be used.
         If False, plain C++ functions will be used.
+
+        Default: True.
 
     *cplace*
         Chroma placement. Must be either "mpeg1" or "mpeg2".
