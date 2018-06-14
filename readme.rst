@@ -133,9 +133,19 @@ Compilation
 
 ::
 
+    mkdir build && cd build
+    meson ../
+    ninja
+
+Or
+
+::
+
     ./autogen.sh
     ./configure
     make
+
+Meson runs faster than autogen.sh and configure.
 
 
 License
